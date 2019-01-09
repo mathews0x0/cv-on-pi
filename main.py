@@ -47,7 +47,7 @@ netModels = [
 ]
 
 
-def move_servo(xoff,yoff):
+def moveservo(xoff,yoff):
     pass  #servo code here
     
 def label_class(img, detection, score, className, boxColor=None):
