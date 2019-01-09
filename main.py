@@ -1,5 +1,8 @@
+#move servos accept  angles to move,gotta convert linear distance to it
+#gotta compensate for the ~3s delay between processing and realtime image
 from __future__ import print_function
-
+import RPi.GPIO as GPIO                                 ## Import GPIO Library.
+import time  
 import numpy as np
 from numpy import pi, sin, cos
 from picamera import PiCamera
@@ -13,6 +16,36 @@ camera = PiCamera()
 camera.resolution = (IM_WIDTH,IM_HEIGHT)
 cv2Net = None
 showVideoStream = False
+'''*************setting up servo functions here****'''
+GPIO.setmode(GPIO.BOARD)                    ## Use BOARD pin numbering.
+def moveservoy(angle):
+    if((angle>34)and(angle<101)):
+        print(angle)
+        GPIO.setup(22, GPIO.OUT)                    ## set output.
+        pwm=GPIO.PWM(22,100)                        ## PWM Frequency
+        pwm.start(5)
+        duty1= float(angle)/10 + 2.5               ## Angle To Duty cycle  Conversion
+        pwm.ChangeDutyCycle(duty1)
+        time.sleep(1)
+        GPIO.cleanup()
+  
+  
+def moveservox(angle):
+    if((angle>0)and(angle<1010)):
+        print(angle)
+        GPIO.setup(18, GPIO.OUT)                    ## set output.
+        pwm=GPIO.PWM(18,100)                        ## PWM Frequency
+        pwm.start(5)
+        duty1= float(angle)/10 + 2.5               ## Angle To Duty cycle  Conversion
+        pwm.ChangeDutyCycle(duty1)
+        time.sleep(1)
+        GPIO.cleanup()
+
+
+'''***************servo ends*******'''
+
+
+
 currentClassDetecting = 'person'
 netModels = [
     {
@@ -48,6 +81,8 @@ netModels = [
 
 
 def moveservo(xoff,yoff):
+    print("move x "+str(xoff))
+    print("move y "+str(yoff))
     pass  #servo code here
     
 def label_class(img, detection, score, className, boxColor=None):
@@ -157,10 +192,10 @@ def run_video_detection(mode, netModel,currentClassDetecting):
 if __name__ == '__main__':
     
     
-    currentClassDetecting = 'person'
+    currentClassDetecting = 'red ball'
     showVideoStream = True
   
-    videoStreamThread = threading.Thread(target=run_video_detection, args=[3,netModels[0],currentClassDetecting])
+    videoStreamThread = threading.Thread(target=run_video_detection, args=[3,netModels[1],currentClassDetecting])
     videoStreamThread.start()
     print("thread popped")
         
