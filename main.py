@@ -17,26 +17,44 @@ camera.resolution = (IM_WIDTH,IM_HEIGHT)
 cv2Net = None
 showVideoStream = False
 '''*************setting up servo functions here****'''
-GPIO.setmode(GPIO.BOARD)                    ## Use BOARD pin numbering.
+def mapRange(value, leftMin, leftMax, rightMin, rightMax):
+    # Figure out how 'wide' each range is
+    leftSpan = leftMax - leftMin
+    rightSpan = rightMax - rightMin
+
+    # Convert the left range into a 0-1 range (float)
+    valueScaled = float(value - leftMin) / float(leftSpan)
+
+    # Convert the 0-1 range into a value in the right range.
+    return rightMin + (valueScaled * rightSpan)
+
+
+                   
 def moveservoy(angle):
-    if((angle>34)and(angle<101)):
-        print(angle)
+    GPIO.setmode(GPIO.BOARD) 
+    yangle=mapRange(angle,-170,170,50,70)    #change mapping ranges here
+    print("yangle is "+str(yangle))
+    if((yangle>50)and(yangle<80)):
+        print(yangle)
         GPIO.setup(22, GPIO.OUT)                    ## set output.
         pwm=GPIO.PWM(22,100)                        ## PWM Frequency
         pwm.start(5)
-        duty1= float(angle)/10 + 2.5               ## Angle To Duty cycle  Conversion
+        duty1= float(yangle)/10 + 2.5               ## Angle To Duty cycle  Conversion
         pwm.ChangeDutyCycle(duty1)
         time.sleep(1)
         GPIO.cleanup()
   
   
 def moveservox(angle):
-    if((angle>0)and(angle<1010)):
-        print(angle)
+    GPIO.setmode(GPIO.BOARD) 
+    xangle=mapRange(angle,-200,200,75,95)           #change mappings here
+    print("xangle is "+str(xangle))
+    if((xangle>70)and(xangle<100)):
+        print(xangle)
         GPIO.setup(18, GPIO.OUT)                    ## set output.
         pwm=GPIO.PWM(18,100)                        ## PWM Frequency
         pwm.start(5)
-        duty1= float(angle)/10 + 2.5               ## Angle To Duty cycle  Conversion
+        duty1= float(xangle)/10 + 2.5               ## Angle To Duty cycle  Conversion
         pwm.ChangeDutyCycle(duty1)
         time.sleep(1)
         GPIO.cleanup()
@@ -82,7 +100,9 @@ netModels = [
 
 def moveservo(xoff,yoff):
     print("move x "+str(xoff))
+    moveservox(xoff)
     print("move y "+str(yoff))
+    moveservoy(yoff)
     pass  #servo code here
     
 def label_class(img, detection, score, className, boxColor=None):
@@ -154,13 +174,15 @@ def track_object(img, detections, score_threshold, classNames, className, tracki
 def run_video_detection(mode, netModel,currentClassDetecting):
     scoreThreshold = 0.2
     trackingThreshold = 50
-
+       
     cv2Net = cv2.dnn.readNetFromTensorflow(netModel['modelPath'], netModel['configPath'])
+    
     stream = io.BytesIO()
     data  = io.BytesIO()
     k=0
     global showVideoStream
     for stream in camera.capture_continuous(data,format='jpeg',use_video_port=True):
+        
         stream.seek(0)
         data = np.fromstring(stream.getvalue(), dtype=np.uint8)
         # "Decode" the image from the array, preserving colour
@@ -169,9 +191,10 @@ def run_video_detection(mode, netModel,currentClassDetecting):
         k=k+1
         print(k)
         # run detection
+        print("ping") 
         cv2Net.setInput(cv2.dnn.blobFromImage(img, 1.0/127.5, (300, 300), (127.5, 127.5, 127.5), swapRB=True, crop=False))
         detections = cv2Net.forward()
-
+        print("pong") 
         if mode == 1:
             detect_all_objects(img, detections[0,0,:,:], scoreThreshold, netModel['classNames'])
         elif mode == 2:
@@ -184,7 +207,7 @@ def run_video_detection(mode, netModel,currentClassDetecting):
         if ch == 27:
             showVideoStream = False
             break
-
+        
     print('exiting run_video_detection...')
     cv2.destroyAllWindows()
     pass

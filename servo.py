@@ -25,7 +25,7 @@ def moveservox(angle):
   GPIO.cleanup()
  
  
-moveservoy(95)
+moveservox(5)
 print("move y done")
 #moveservox()
 
