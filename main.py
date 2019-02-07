@@ -2,67 +2,26 @@
 #gotta compensate for the ~3s delay between processing and realtime image
 from __future__ import print_function
 import RPi.GPIO as GPIO                                 ## Import GPIO Library.
-import time  
+import time
+import serial
+import picamera
 import numpy as np
 from numpy import pi, sin, cos
-from picamera import PiCamera
+#from picamera import PiCamera
 import cv2
 import io
 from picamera.array import PiRGBArray
 import threading
 IM_WIDTH = 320
 IM_HEIGHT = 240
-camera = PiCamera()
+camera = picamera.PiCamera()
 camera.resolution = (IM_WIDTH,IM_HEIGHT)
+ser = serial.Serial('/dev/ttyACM0') 
 cv2Net = None
 showVideoStream = False
-'''*************setting up servo functions here****'''
-def mapRange(value, leftMin, leftMax, rightMin, rightMax):
-    # Figure out how 'wide' each range is
-    leftSpan = leftMax - leftMin
-    rightSpan = rightMax - rightMin
-
-    # Convert the left range into a 0-1 range (float)
-    valueScaled = float(value - leftMin) / float(leftSpan)
-
-    # Convert the 0-1 range into a value in the right range.
-    return rightMin + (valueScaled * rightSpan)
 
 
-                   
-def moveservoy(angle):
-    GPIO.setmode(GPIO.BOARD) 
-    yangle=mapRange(angle,-170,170,50,70)    #change mapping ranges here
-    print("yangle is "+str(yangle))
-    if((yangle>50)and(yangle<80)):
-        print(yangle)
-        GPIO.setup(22, GPIO.OUT)                    ## set output.
-        pwm=GPIO.PWM(22,100)                        ## PWM Frequency
-        pwm.start(5)
-        duty1= float(yangle)/10 + 2.5               ## Angle To Duty cycle  Conversion
-        pwm.ChangeDutyCycle(duty1)
-        time.sleep(1)
-        GPIO.cleanup()
-  
-  
-def moveservox(angle):
-    GPIO.setmode(GPIO.BOARD) 
-    xangle=mapRange(angle,-200,200,75,95)           #change mappings here
-    print("xangle is "+str(xangle))
-    if((xangle>70)and(xangle<100)):
-        print(xangle)
-        GPIO.setup(18, GPIO.OUT)                    ## set output.
-        pwm=GPIO.PWM(18,100)                        ## PWM Frequency
-        pwm.start(5)
-        duty1= float(xangle)/10 + 2.5               ## Angle To Duty cycle  Conversion
-        pwm.ChangeDutyCycle(duty1)
-        time.sleep(1)
-        GPIO.cleanup()
-
-
-'''***************servo ends*******'''
-
-
+j=0
 
 currentClassDetecting = 'person'
 netModels = [
@@ -98,13 +57,6 @@ netModels = [
 ]
 
 
-def moveservo(xoff,yoff):
-    print("move x "+str(xoff))
-    moveservox(xoff)
-    print("move y "+str(yoff))
-    moveservoy(yoff)
-    pass  #servo code here
-    
 def label_class(img, detection, score, className, boxColor=None):
     rows = img.shape[0]
     cols = img.shape[1]
@@ -146,11 +98,11 @@ def detect_object(img, detections, score_threshold, classNames, className):
             label_class(img, detection, score, classNames[class_id])
     pass
 
-def track_object(img, detections, score_threshold, classNames, className, tracking_threshold):
+def track_object(k,img, detections, score_threshold, classNames, className, tracking_threshold):
     for detection in detections:
         score = float(detection[2])
         class_id = int(detection[1])
-        if className in classNames.values() and className == classNames[class_id] and score > score_threshold:
+        if className in classNames.values() and  classNames[class_id] == "red ball" and score > score_threshold:
             
             rows = img.shape[0]
             cols = img.shape[1]
@@ -160,13 +112,23 @@ def track_object(img, detections, score_threshold, classNames, className, tracki
             marginTop = int(detection[4] * rows) # yTop
             marginBottom = rows - int(detection[6] * rows) # rows - yBottom
             yMarginDiff = marginTop - marginBottom
-            moveservo(xMarginDiff,yMarginDiff)
+            #print(xMarginDiff,yMarginDiff)
             
             
-            if xMarginDiff < tracking_threshold and yMarginDiff < tracking_threshold:
+            
+            
+            
+            if abs(xMarginDiff) < tracking_threshold and abs(yMarginDiff) < tracking_threshold:
                 boxColor = (0, 255, 0)
+                data=str(xMarginDiff)+str(',')+str(yMarginDiff)+str(',')+str(50)+str('..')
+                ser.write(data.encode())
+                print("command "+str(k))
             else:
+                data=str(xMarginDiff)+str(',')+str(yMarginDiff)+str(',')+str(35)+str('..')
+                ser.write(data.encode())
+                print("command "+str(k))
                 boxColor = (0, 0, 255)
+            
 
             label_class(img, detection, score, classNames[class_id], boxColor)
     pass
@@ -181,26 +143,30 @@ def run_video_detection(mode, netModel,currentClassDetecting):
     data  = io.BytesIO()
     k=0
     global showVideoStream
-    for stream in camera.capture_continuous(data,format='jpeg',use_video_port=True):
-        
-        stream.seek(0)
-        data = np.fromstring(stream.getvalue(), dtype=np.uint8)
-        # "Decode" the image from the array, preserving colour
-        img = cv2.imdecode(data, 1)
+    for i in range(0,1000):
+        with picamera.array.PiRGBArray(camera) as stream:
+            #time.sleep(3)
+            
+            camera.capture(stream, format='bgr')
+            
+            # At this point the image is available as stream.array
+            img = stream.array
+            print("shot " + str(k))
+            k+=1
+            #img = cv2.imdecode(dat
         # img = img[:, :, ::-1]
-        k=k+1
-        print(k)
+       
         # run detection
-        print("ping") 
+     #   print("ping") 
         cv2Net.setInput(cv2.dnn.blobFromImage(img, 1.0/127.5, (300, 300), (127.5, 127.5, 127.5), swapRB=True, crop=False))
         detections = cv2Net.forward()
-        print("pong") 
+        #print("pong") 
         if mode == 1:
             detect_all_objects(img, detections[0,0,:,:], scoreThreshold, netModel['classNames'])
         elif mode == 2:
             detect_object(img, detections[0,0,:,:], scoreThreshold, netModel['classNames'], currentClassDetecting)
         elif mode == 3:
-            track_object(img, detections[0,0,:,:], scoreThreshold, netModel['classNames'], currentClassDetecting, trackingThreshold)
+            track_object(k,img, detections[0,0,:,:], scoreThreshold, netModel['classNames'], currentClassDetecting, trackingThreshold)
         
         cv2.imshow('Real-Time Object Detection', img)
         ch = cv2.waitKey(1)
