@@ -15,7 +15,7 @@ from picamera.array import PiRGBArray
 IM_WIDTH = 640
 IM_HEIGHT = 480
 print("Starting")
-ser = serial.Serial('/dev/ttyACM0')
+ser = serial.Serial('/dev/ttyACM0',baudrate=9600)
 print("Starting2")
 camera = picamera.PiCamera()
 print("Starting3")
@@ -31,8 +31,8 @@ args = vars(ap.parse_args())
 # define the lower and upper boundaries of the "green"
 # ball in the HSV color space, then initialize the
 # list of tracked points
-greenLower = (29, 86, 6)
-greenUpper = (64, 255, 255)
+greenLower = (0, 100, 100)
+greenUpper = (20, 255, 255)
 pts = deque(maxlen=args["buffer"])
 tracking_threshold = 30;
 print("Starting1")
@@ -100,7 +100,8 @@ for image in camera.capture_continuous(rawCapture,format="bgr",use_video_port=Tr
             data=str(xMarginDiff/2.5)+str(',')+str(yMarginDiff/2.5)+str(',')+str(35)+str(',')+str(0)+str('..')
             
         ser.write(data.encode())
-        #print("cc")
+        print(data)
+        print("\n")
             
         # only proceed if the radius meets a minimum size
         if radius > 10:
@@ -115,7 +116,7 @@ for image in camera.capture_continuous(rawCapture,format="bgr",use_video_port=Tr
 
     
     # show the frame to our screen
-    cv2.imshow("Frame",frame)
+    cv2.imshow("Frame",mask)
     rawCapture.truncate(0)
     key = cv2.waitKey(1) & 0xFF
 

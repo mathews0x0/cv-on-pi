@@ -17,7 +17,7 @@ IM_HEIGHT = 240
 camera = picamera.PiCamera()
 camera.resolution = (IM_WIDTH,IM_HEIGHT)
 camera.framerate = 80
-ser = serial.Serial('/dev/ttyACM0',9600) 
+ser = serial.Serial('/dev/ttyACM0',baudrate=9600) 
 cv2Net = None
 showVideoStream = False
 
@@ -36,6 +36,19 @@ netModels = [
     }
 ]
 
+
+def readser(ser,e,lock):
+    print("ser thread start")
+    while(True):
+        lock.acquire(1)
+        line = ser.readline()
+        line = str(line)
+        lock.release()
+        #print("Ser"+line)
+        if(line=="STOPGRAB"):
+            print("Grabbed")
+            e.set()
+        
 
 def label_class(img, detection, score, className, boxColor=None):
     rows = img.shape[0]
@@ -79,14 +92,16 @@ def detect_object(img, detections, score_threshold, classNames, className):
             label_class(img, detection, score, classNames[class_id])
     pass
 
-def track_object(k,img, detections, score_threshold, classNames, className, tracking_threshold):
+def track_object(k,img, detections, score_threshold, classNames, className, tracking_threshold,e,lock):
     for detection in detections:
         score = float(detection[2])
         class_id = int(detection[1])
-        #print(class_id)
-        #print(classNames[class_id])
-        #if className in classNames.values() and  classNames[class_id] == "red ball" and score > score_threshold:
-        if(class_id==1 and score > score_threshold):   
+        if(class_id==-1 or class_id>2):
+            class_id=0
+        print(class_id)
+        print(classNames[class_id])
+        if className in classNames.values() and  classNames[class_id] == "red ball" and score > score_threshold:
+            
             rows = img.shape[0]
             cols = img.shape[1]
             marginLeft = int(detection[3] * cols) # xLeft
@@ -105,30 +120,24 @@ def track_object(k,img, detections, score_threshold, classNames, className, trac
                 boxColor = (0, 255, 0)
                 data=str(xMarginDiff)+str(',')+str(yMarginDiff)+str(',')+str(80)+str(',')+str(10)+str('..')
                 print("grab")
+                lock.acquire(1)
                 ser.write(data.encode())
-                time.sleep(2)
-                print("grab initiated")
-                while True:
-                    print("waiting to grab") 
-                    reply=ser.readline()#[:-2]#trim last newline
-                    if reply:
-                        print(reply)
-                        break
+                lock.release()
+                e.wait()
                 #time.sleep(0.5)
             else:
                 data=str(xMarginDiff)+str(',')+str(yMarginDiff)+str(',')+str(110)+str(',')+str(0)+str('..')
+                lock.acquire(1)
                 ser.write(data.encode())
+                lock.release()
                 boxColor = (0, 0, 255)
                 #time.sleep(0.5)
-                ser.write(data.encode())
-                
-                        
-                  
+            
             print(data)
             label_class(img, detection, score, classNames[class_id], boxColor)
     pass
 
-def run_video_detection(mode, netModel,currentClassDetecting):
+def run_video_detection(mode, netModel,currentClassDetecting,e,lock):
     scoreThreshold = 0.2
     trackingThreshold = 20
        
@@ -137,17 +146,16 @@ def run_video_detection(mode, netModel,currentClassDetecting):
     stream = io.BytesIO()
     data  = io.BytesIO()
     k=0
+    stream = picamera.array.PiRGBArray(camera)
+    time.sleep(1)
     global showVideoStream
     for i in range(0,1000):
-        with picamera.array.PiRGBArray(camera) as stream:
-            
-            
-            camera.capture(stream, format='bgr',use_video_port=True)
-            
-            # At this point the image is available as stream.array
-            img = stream.array
-            #print("shot " + str(k))
-            k+=1
+        camera.capture(stream, format='bgr',use_video_port=True)
+
+        # At this point the image is available as stream.array
+        img = stream.array
+        #print("shot " + str(k))
+        k+=1
             #img = cv2.imdecode(dat
         # img = img[:, :, ::-1]
        
@@ -161,15 +169,13 @@ def run_video_detection(mode, netModel,currentClassDetecting):
         #elif mode == 2:
          #   detect_object(img, detections[0,0,:,:], scoreThreshold, netModel['classNames'], currentClassDetecting)
         #elif mode == 3:
-        track_object(k,img, detections[0,0,:,:], scoreThreshold, netModel['classNames'], currentClassDetecting, trackingThreshold)
+        track_object(k,img, detections[0,0,:,:], scoreThreshold, netModel['classNames'], currentClassDetecting, trackingThreshold,e,lock)
         
         cv2.imshow('Real-Time Object Detection', img)
-        key = cv2.waitKey(1) & 0xFF
-
-        # if the 'q' key is pressed, stop the loop
-        if key == ord("q"):
+        ch = cv2.waitKey(1)
+        if ch == 27:
+            showVideoStream = False
             break
-        
         
     print('exiting run_video_detection...')
     cv2.destroyAllWindows()
@@ -180,8 +186,12 @@ if __name__ == '__main__':
     
     currentClassDetecting = 'red ball'
     showVideoStream = True
-  
-    videoStreamThread = threading.Thread(target=run_video_detection, args=[3,netModels[1],currentClassDetecting])
+    e = threading.Event()
+    lock = threading.Lock()
+    t1 = threading.Thread(target=readser, args=[ser,e,lock])
+    t1.start()
+      
+    videoStreamThread = threading.Thread(target=run_video_detection, args=[3,netModels[1],currentClassDetecting,e,lock])
     videoStreamThread.start()
     print("thread popped")
         

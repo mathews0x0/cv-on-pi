@@ -11,9 +11,10 @@ int y1=0;
 int z1=0;
 int g1=0;
 int x=0,y=0,z=0,g=0;
-int cx=65,cy=50,cz=110;
+int cx=45,cy=50,cz=110;
 int dx=1,dy=1;
 int zo=0;
+int grabflag=0;
 void setup() {
   Serial.begin(9600);
   servox.write(45);//40  25 45 65 | --200 -  +200
@@ -26,13 +27,14 @@ void setup() {
   servoz.attach(11);
     servog.attach(6);
     servog.writeMicroseconds(1000);
-  Serial.println("servo-test-22-dual-input"); // so I can keep track of what is loaded
+  //Serial.println("servo-test-22-dual-input"); // so I can keep track of what is loaded
 }
 
 void loop() {
   char c;
-  
+  //Serial.println("grabbed from loop");
   while (Serial.available()) {
+     //Serial.println("grabbed from serial avai;");
      c = Serial.read();  //gets one byte from serial buffer
      //makes the string readString
     delay(2);  //slow looping to allow buffer to fill with next character
@@ -86,12 +88,15 @@ void loop() {
       //Serial.println(z);
       //Serial.print("writing Angleg: ");
       //Serial.println(g);
+      if(z==80){//grab 
+      grabflag=1;}
+      
       if(z==110){
         
 
         
       if(x<0){
-        if(cx>25)
+        if(cx>10)
           cx=cx-dx;
       }
       else 
@@ -107,49 +112,55 @@ void loop() {
       
 
       
-      }else{
-        Serial.print("init"+cx);
-        for(int v=110;v>60;v--){
-          servoz.write(v);
-          if(v%2==0)
-            cy--;
-            servoy.write(cy);
-          delay(100);
-        }
-        delay(2000);
-        for(int v=60;v<110;v++){
-          servoz.write(v);
-          if(v%2==0)
-            cy++;
-            servoy.write(cy);
-          delay(100);
-        }
       }
+   
+      
       servox.write(cx);
       servoy.write(cy);
-      Serial.print("writing Anglex: ");
+      /*Serial.print("writing Anglex: ");
       Serial.println(cx);  
       Serial.print("writing Angley: ");
       Serial.println(cy);
       Serial.print("writing Anglez: ");
       Serial.println(z);
       //Serial.print("writing Angleg: ");
-      //Serial.println(g);
+      //Serial.println(g);*/
       
-      if(g>=1){
-        servog.write(130);
-        delay(500);
-        servog.write(50);}
+      if(grabflag==1){
+      //do the grab here
+      //Serial.println("grabflag set");
+      //delay(2000);
+      //Serial.print("init"+cx);
+        for(int v=110;v>80;v--){
+          servoz.write(v);
+          if(v%2==0)
+            cy--;
+            servoy.write(cy);
+          delay(50);
+        }
+        delay(2000);
+        for(int v=80;v<110;v++){
+          servoz.write(v);
+          if(v%2==0)
+            cy++;
+            servoy.write(cy);
+          delay(50);
+        }
+        //Serial.println("\nSTOPGRAB");
+      
+      Serial.println("grab done,continue");
+      grabflag=0;
+      }
+      
+     
       x=0;
       y=0;
       g=0;
       
   
   }
-  
-  
   else{
-    Serial.print("eerrrrr ");
+    //Serial.print("eerrrrr ");
     z=110;
   }
     
