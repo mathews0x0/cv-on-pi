@@ -130,7 +130,7 @@ def track_object(k,img, detections, score_threshold, classNames, className, trac
 
 def run_video_detection(mode, netModel,currentClassDetecting):
     scoreThreshold = 0.2
-    trackingThreshold = 20
+    trackingThreshold = 35
        
     cv2Net = cv2.dnn.readNetFromTensorflow(netModel['modelPath'], netModel['configPath'])
     
@@ -143,7 +143,6 @@ def run_video_detection(mode, netModel,currentClassDetecting):
             
             
             camera.capture(stream, format='bgr',use_video_port=True)
-            
             # At this point the image is available as stream.array
             img = stream.array
             #print("shot " + str(k))

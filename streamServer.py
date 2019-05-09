@@ -1,26 +1,22 @@
 #move servos accept  angles to move,gotta convert linear distance to it
 #gotta compensate for the ~3s delay between processing and realtime image
 from __future__ import print_function
-import RPi.GPIO as GPIO                                 ## Import GPIO Library.
 import time
-import serial
-import picamera
 import numpy as np
+import serial
 from numpy import pi, sin, cos
 #from picamera import PiCamera
 import cv2
 import io
-from picamera.array import PiRGBArray
 import threading
-IM_WIDTH = 320
-IM_HEIGHT = 240
-camera = picamera.PiCamera()
-camera.resolution = (IM_WIDTH,IM_HEIGHT)
-camera.framerate = 80
-ser = serial.Serial('/dev/ttyACM0',baudrate=9600) 
+import zmq
+import base64
 cv2Net = None
 showVideoStream = False
-
+ser = serial.Serial('/dev/ttyACM0',9600)
+context = zmq.Context()
+footage_socket = context.socket(zmq.PAIR)
+footage_socket.bind('tcp://*:5555')
 
 j=0
 
@@ -83,10 +79,7 @@ def track_object(k,img, detections, score_threshold, classNames, className, trac
     for detection in detections:
         score = float(detection[2])
         class_id = int(detection[1])
-        #print(class_id)
-        #print(classNames[class_id])
-        #if className in classNames.values() and  classNames[class_id] == "red ball" and score > score_threshold:
-        if(class_id==1 and score > score_threshold):    
+        if(class_id==1 and score > score_threshold):   
             rows = img.shape[0]
             cols = img.shape[1]
             marginLeft = int(detection[3] * cols) # xLeft
@@ -94,32 +87,40 @@ def track_object(k,img, detections, score_threshold, classNames, className, trac
             xMarginDiff = marginLeft - marginRight
             marginTop = int(detection[4] * rows) # yTop
             marginBottom = rows - int(detection[6] * rows) # rows - yBottom
-            yMarginDiff = marginTop - marginBottom
-            #print(xMarginDiff,yMarginDiff)
-            
-            
-            
-            
+            yMarginDiff = marginTop - marginBottom            
+
             
             if abs(xMarginDiff) < tracking_threshold and abs(yMarginDiff) < tracking_threshold:
                 boxColor = (0, 255, 0)
                 data=str(xMarginDiff)+str(',')+str(yMarginDiff)+str(',')+str(80)+str(',')+str(10)+str('..')
-                print("grab")
+                #print("grab")
                 ser.write(data.encode())
+                #footage_socket.send_string(data)
+                #time.sleep(2)
+                print("grab initiated")
+                while True:
+                    print("waiting to grab") 
+                    reply=ser.readline()#[:-2]#trim last newline
+                    if reply:
+                        print(reply)
+                        break
+            
                 #time.sleep(0.5)
             else:
                 data=str(xMarginDiff)+str(',')+str(yMarginDiff)+str(',')+str(110)+str(',')+str(0)+str('..')
                 ser.write(data.encode())
+                #footage_socket.send_string(data)
                 boxColor = (0, 0, 255)
                 #time.sleep(0.5)
-            
+                #ser.write(data.encode())
+
             print(data)
             label_class(img, detection, score, classNames[class_id], boxColor)
     pass
 
 def run_video_detection(mode, netModel,currentClassDetecting):
-    scoreThreshold = 0.5
-    trackingThreshold = 20
+    scoreThreshold = 0.7
+    trackingThreshold = 15
        
     cv2Net = cv2.dnn.readNetFromTensorflow(netModel['modelPath'], netModel['configPath'])
     
@@ -128,37 +129,30 @@ def run_video_detection(mode, netModel,currentClassDetecting):
     k=0
     global showVideoStream
     for i in range(0,1000):
-        with picamera.array.PiRGBArray(camera) as stream:
-            
-            
-            camera.capture(stream, format='bgr',use_video_port=True)
-            
-            # At this point the image is available as stream.array
-            img = stream.array
-            #print("shot " + str(k))
-            k+=1
-            #img = cv2.imdecode(dat
-        # img = img[:, :, ::-1]
-       
-        # run detection
-     #   print("ping") 
-        cv2Net.setInput(cv2.dnn.blobFromImage(img, 1.0/127.5, (300, 300), (127.5, 127.5, 127.5), swapRB=True, crop=False))
-        detections = cv2Net.forward()
-        #print("pong") 
-        #if mode == 1:
-         #   detect_all_objects(img, detections[0,0,:,:], scoreThreshold, netModel['classNames'])
-        #elif mode == 2:
-         #   detect_object(img, detections[0,0,:,:], scoreThreshold, netModel['classNames'], currentClassDetecting)
-        #elif mode == 3:
-        track_object(k,img, detections[0,0,:,:], scoreThreshold, netModel['classNames'], currentClassDetecting, trackingThreshold)
-        
-        cv2.imshow('Real-Time Object Detection', img)
-        #ch = cv2.waitKey(1)
-        key = cv2.waitKey(1) & 0xFF
+        try:
+            frame = footage_socket.recv_string()
+            img = base64.b64decode(frame)
+            npimg = np.fromstring(img, dtype=np.uint8)
+            source = cv2.imdecode(npimg, 1)
+            cv2Net.setInput(cv2.dnn.blobFromImage(source, 1.0/127.5, (300, 300), (127.5, 127.5, 127.5), swapRB=True, crop=False))
+            detections = cv2Net.forward()
 
-        # if the 'q' key is pressed, stop the loop
-        if key == ord("q"):
+            track_object(k,source, detections[0,0,:,:], scoreThreshold, netModel['classNames'], currentClassDetecting, trackingThreshold)
+            k+=1
+            footage_socket.send_string("")
+            cv2.imshow('Real-Time Object Detection', source)
+            
+            #cv2.imshow("Stream", source)
+            key = cv2.waitKey(1) & 0xFF
+
+            # if the 'q' key is pressed, stop the loop
+            if key == ord("q"):
+                break
+
+        except KeyboardInterrupt:
+            cv2.destroyAllWindows()
             break
+
         
     print('exiting run_video_detection...')
     cv2.destroyAllWindows()

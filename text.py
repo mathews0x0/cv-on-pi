@@ -146,12 +146,15 @@ def run_video_detection(mode, netModel,currentClassDetecting,e,lock):
     stream = io.BytesIO()
     data  = io.BytesIO()
     k=0
-    stream = picamera.array.PiRGBArray(camera)
+    frame_rate_calc = 1.0
+    freq = cv2.getTickFrequency()
+    stream = picamera.array.PiRGBArray(camera, size=(320, 240))
     time.sleep(1)
     global showVideoStream
     for i in range(0,1000):
+        t1 = cv2.getTickCount()
         camera.capture(stream, format='bgr',use_video_port=True)
-
+        
         # At this point the image is available as stream.array
         img = stream.array
         #print("shot " + str(k))
@@ -170,8 +173,12 @@ def run_video_detection(mode, netModel,currentClassDetecting,e,lock):
          #   detect_object(img, detections[0,0,:,:], scoreThreshold, netModel['classNames'], currentClassDetecting)
         #elif mode == 3:
         track_object(k,img, detections[0,0,:,:], scoreThreshold, netModel['classNames'], currentClassDetecting, trackingThreshold,e,lock)
-        
+        cv2.putText(img, "FPS: {0:.2f}".format(frame_rate_calc), (20, 20),
+                    cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 0), 2, cv2.LINE_AA)
         cv2.imshow('Real-Time Object Detection', img)
+        t2 = cv2.getTickCount()
+        time1 = (t2 - t1) / freq
+        frame_rate_calc = 1 / time1
         ch = cv2.waitKey(1)
         if ch == 27:
             showVideoStream = False

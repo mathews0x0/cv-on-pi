@@ -12,7 +12,7 @@ int z1=0;
 int g1=0;
 int x=0,y=0,z=0,g=0;
 int cx=45,cy=50,cz=110;
-int dx=1,dy=1;
+int dx=3,dy=2;
 int zo=0;
 int grabflag=0;
 void setup() {
@@ -25,8 +25,10 @@ void setup() {
 
   servoy.attach(10); 
   servoz.attach(11);
-    servog.attach(6);
-    servog.writeMicroseconds(1000);
+    servog.attach(4);
+    servog.writeMicroseconds(700);
+    //delay(2000);
+    //servog.writeMicroseconds(1000);
   //Serial.println("servo-test-22-dual-input"); // so I can keep track of what is loaded
 }
 
@@ -138,6 +140,11 @@ void loop() {
             servoy.write(cy);
           delay(50);
         }
+        for(int v=700;v<1000;v++){
+          servog.writeMicroseconds(v);
+          delay(3);
+        }
+        
         delay(2000);
         for(int v=80;v<110;v++){
           servoz.write(v);
@@ -146,6 +153,19 @@ void loop() {
             servoy.write(cy);
           delay(50);
         }
+        for(int v=cx;v<120;v++){
+          servox.write(v);
+          delay(50);
+        }
+        for(int v=1000;v>700;v--){
+          servog.writeMicroseconds(v);
+          delay(4);
+        }
+        for(int v=120;v>45;v--){
+          servox.write(v);
+          delay(50);
+        }
+
         //Serial.println("\nSTOPGRAB");
       
       Serial.println("grab done,continue");
